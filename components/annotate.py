@@ -272,13 +272,13 @@ def show_annotation_page():
                 st.write(f"Correction: `{latest_annotation['corrected_label']}`")
         
         st.markdown("---")
-        st.markdown("### Is this label correct?")
+        st.markdown("### Review Image")
         
         # Annotation form
         is_correct = st.radio(
             "Select one:",
-            options=["correct", "incorrect"],
-            format_func=lambda x: "✅ Correct" if x == "correct" else "❌ Incorrect",
+            options=["correct", "incorrect", "invalid"],
+            format_func=lambda x: "✅ Correct" if x == "correct" else ("❌ Incorrect" if x == "incorrect" else "⚠️ Invalid Sample"),
             key=f"radio_{st.session_state.current_index}"
         )
         
@@ -291,7 +291,7 @@ def show_annotation_page():
             )
         
         # Submit buttons
-        col_a, col_b = st.columns(2)
+        col_a, col_b, col_c = st.columns(3)
         
         with col_a:
             if is_correct == "correct":
@@ -304,7 +304,8 @@ def show_annotation_page():
                         'suggested_label': current_data['suggested_label'],
                         'is_correct': True,
                         'corrected_label': '',
-                        'annotator': username
+                        'annotator': username,
+                        'status': 'correct'
                     })
                     
                     # Show success toast
@@ -326,11 +327,35 @@ def show_annotation_page():
                         'suggested_label': current_data['suggested_label'],
                         'is_correct': False,
                         'corrected_label': corrected_label.strip(),
-                        'annotator': username
+                        'annotator': username,
+                        'status': 'corrected'
                     })
                     
                     # Show success toast
                     st.success(f"✅ Saved correction: '{corrected_label.strip()}'", icon="✅")
+                    
+                    # Move to next
+                    if st.session_state.current_index < len(filtered_data) - 1:
+                        st.session_state.current_index += 1
+                    st.rerun()
+        
+        with col_c:
+            if is_correct == "invalid":
+                if st.button("⚠️ Mark Invalid & Next", type="secondary", use_container_width=True):
+                    # Save annotation
+                    storage.save_annotation({
+                        'image_path': current_data['image_path'],
+                        'folder': current_data['folder'],
+                        'filename': current_data['filename'],
+                        'suggested_label': current_data['suggested_label'],
+                        'is_correct': False,
+                        'corrected_label': 'INVALID_SAMPLE',
+                        'annotator': username,
+                        'status': 'invalid'
+                    })
+                    
+                    # Show warning toast
+                    st.warning("⚠️ Marked as invalid sample", icon="⚠️")
                     
                     # Move to next
                     if st.session_state.current_index < len(filtered_data) - 1:

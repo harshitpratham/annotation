@@ -19,7 +19,7 @@ if 'storage' not in st.session_state:
 
 
 def login_page():
-    """Display login/registration page."""
+    """Display login page with password authentication."""
     st.title("📝 Word Recognition Annotation Tool")
     st.markdown("---")
     
@@ -39,63 +39,41 @@ def login_page():
     st.markdown("---")
     
     col1, col2, col3 = st.columns([1, 2, 1])
+    storage = st.session_state.storage
     
+    # CENTER: LOGIN ONLY
     with col2:
-        st.subheader("Login")
+        st.subheader("🔓 Login")
         
-        # Username input
-        username = st.text_input(
+        login_username = st.text_input(
             "Username",
             placeholder="Enter your username",
-            key="username_input"
+            key="login_username"
         )
         
-        # Role selection
-        role = st.selectbox(
-            "Role",
-            options=["annotator", "admin"],
-            help="Select 'annotator' to label images, or 'admin' to view all annotations"
+        login_password = st.text_input(
+            "Password",
+            type="password",
+            placeholder="Enter your password",
+            key="login_password"
         )
         
-        # Existing users list
-        storage = st.session_state.storage
-        users = storage.load_users()
-        
-        if users:
-            st.markdown("#### Quick Login - Existing Users")
-            existing_usernames = [u['username'] for u in users]
-            
-            # Display users as buttons
-            cols = st.columns(3)
-            for idx, user in enumerate(users):
-                with cols[idx % 3]:
-                    if st.button(
-                        f"👤 {user['username']} ({user['role']})",
-                        key=f"user_{user['username']}",
-                        use_container_width=True
-                    ):
-                        st.session_state.current_user = user['username']
-                        st.session_state.current_role = user['role']
-                        st.rerun()
+        if st.button("Login", type="primary", use_container_width=True):
+            if login_username.strip() and login_password.strip():
+                success, user = storage.authenticate_user(login_username.strip(), login_password)
+                
+                if success:
+                    st.session_state.current_user = user['username']
+                    st.session_state.current_role = user['role']
+                    st.success(f"✅ Welcome {user['username']}!")
+                    st.rerun()
+                else:
+                    st.error("❌ Invalid username or password")
+            else:
+                st.error("⚠️ Please enter both username and password")
         
         st.markdown("---")
-        
-        # Login button
-        if st.button("🚀 Login / Register", type="primary", use_container_width=True):
-            if username.strip():
-                # Register or login user
-                is_new = storage.register_user(username.strip(), role)
-                st.session_state.current_user = username.strip()
-                st.session_state.current_role = role
-                
-                if is_new:
-                    st.success(f"✅ Welcome {username}! Account created successfully.")
-                else:
-                    st.success(f"✅ Welcome back {username}!")
-                
-                st.rerun()
-            else:
-                st.error("⚠️ Please enter a username")
+        st.info("💡 Contact administrator to create an account")
 
 
 def main():
@@ -125,11 +103,11 @@ def main():
     # Route to appropriate page
     if role == "admin":
         # Import and show admin page
-        from pages.admin import show_admin_page
+        from components.admin import show_admin_page
         show_admin_page()
     else:
         # Import and show annotation page
-        from pages.annotate import show_annotation_page
+        from components.annotate import show_annotation_page
         show_annotation_page()
 
 

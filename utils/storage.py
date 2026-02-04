@@ -6,10 +6,13 @@ Handles user management and annotation persistence with full history.
 import os
 import json
 import csv
+import hashlib
+import secrets
 from pathlib import Path
 from datetime import datetime
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 import pandas as pd
+from config import PASSWORD_MIN_LENGTH, PASSWORD_REQUIRE_UPPERCASE, PASSWORD_REQUIRE_NUMBERS, ADMIN_CREATION_KEY
 
 
 class AnnotationStorage:
@@ -54,37 +57,154 @@ class AnnotationStorage:
             with open(self.history_json, 'w') as f:
                 json.dump([], f)
     
-    def register_user(self, username: str, role: str = "annotator") -> bool:
+    def register_user(self, username: str, password: str, role: str = "annotator", admin_key: Optional[str] = None) -> Tuple[bool, str]:
         """
-        Register a new user or update existing user.
+        Register a new user with password authentication.
         
         Args:
             username: Username
+            password: Password
             role: User role ("annotator" or "admin")
+            admin_key: Required if role is "admin"
             
         Returns:
-            True if new user was created, False if user already existed
+            Tuple of (success: bool, message: str)
         """
         users = self.load_users()
         
-        # Check if user already exists
-        for user in users:
-            if user['username'] == username:
-                # Update role if changed
-                if user['role'] != role:
-                    user['role'] = role
-                    self._save_users(users)
-                return False
+        # Validate username
+        if not username or len(username) < 3:
+            return False, "Username must be at least 3 characters"
+        
+        if any(u['username'] == username for u in users):
+            return False, "Username already exists"
+        
+        # Validate password
+        pwd_validation = self._validate_password(password)
+        if not pwd_validation[0]:
+            return False, pwd_validation[1]
+        
+        # Admin role requires admin key
+        if role == "admin":
+            if not admin_key or admin_key != ADMIN_CREATION_KEY:
+                return False, "Invalid admin creation key"
+        
+        # Hash password
+        password_hash = self._hash_password(password)
         
         # Add new user
         users.append({
             'username': username,
+            'password_hash': password_hash,
             'role': role,
-            'created_at': datetime.now().isoformat()
+            'created_at': datetime.now().isoformat(),
+            'last_login': None,
+            'is_active': True
         })
         
         self._save_users(users)
+        return True, f"User '{username}' created successfully as {role}"
+    
+    def authenticate_user(self, username: str, password: str) -> Tuple[bool, Optional[Dict]]:
+        """
+        Authenticate user with username and password.
+        
+        Args:
+            username: Username
+            password: Password
+            
+        Returns:
+            Tuple of (success: bool, user_dict: Optional[Dict])
+        """
+        users = self.load_users()
+        
+        for user in users:
+            if user['username'] == username:
+                if not user.get('is_active', True):
+                    return False, None
+                
+                if self._verify_password(password, user.get('password_hash', '')):
+                    # Update last login
+                    user['last_login'] = datetime.now().isoformat()
+                    self._save_users(users)
+                    return True, user
+                else:
+                    return False, None
+        
+        return False, None
+    
+    @staticmethod
+    def _hash_password(password: str) -> str:
+        """Hash password with salt using PBKDF2."""
+        salt = secrets.token_hex(32)
+        pwd_hash = hashlib.pbkdf2_hmac('sha256', password.encode(), salt.encode(), 100000)
+        return f"{salt}${pwd_hash.hex()}"
+    
+    @staticmethod
+    def _verify_password(password: str, password_hash: str) -> bool:
+        """Verify password against hash."""
+        try:
+            salt, pwd_hash = password_hash.split('$')
+            new_hash = hashlib.pbkdf2_hmac('sha256', password.encode(), salt.encode(), 100000)
+            return new_hash.hex() == pwd_hash
+        except:
+            return False
+    
+    @staticmethod
+    def _validate_password(password: str) -> Tuple[bool, str]:
+        """Validate password strength."""
+        if len(password) < PASSWORD_MIN_LENGTH:
+            return False, f"Password must be at least {PASSWORD_MIN_LENGTH} characters"
+        
+        if PASSWORD_REQUIRE_UPPERCASE and not any(c.isupper() for c in password):
+            return False, "Password must contain at least one uppercase letter"
+        
+        if PASSWORD_REQUIRE_NUMBERS and not any(c.isdigit() for c in password):
+            return False, "Password must contain at least one number"
+        
+        return True, "Password valid"
+    
+    def disable_user(self, username: str) -> bool:
+        """Deactivate a user account (keep annotations)."""
+        users = self.load_users()
+        for user in users:
+            if user['username'] == username:
+                user['is_active'] = False
+                self._save_users(users)
+                return True
+        return False
+    
+    def enable_user(self, username: str) -> bool:
+        """Reactivate a user account."""
+        users = self.load_users()
+        for user in users:
+            if user['username'] == username:
+                user['is_active'] = True
+                self._save_users(users)
+                return True
+        return False
+    
+    def delete_user(self, username: str) -> bool:
+        """Delete a user account (keep annotations)."""
+        users = self.load_users()
+        users = [u for u in users if u['username'] != username]
+        self._save_users(users)
         return True
+    
+    def update_password(self, username: str, new_password: str) -> Tuple[bool, str]:
+        """Update user password."""
+        pwd_validation = self._validate_password(new_password)
+        if not pwd_validation[0]:
+            return False, pwd_validation[1]
+        
+        users = self.load_users()
+        for user in users:
+            if user['username'] == username:
+                user['password_hash'] = self._hash_password(new_password)
+                self._save_users(users)
+                return True, "Password updated successfully"
+        
+        return False, "User not found"
     
     def load_users(self) -> List[Dict]:
         """Load all registered users."""
