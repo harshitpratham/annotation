@@ -253,7 +253,7 @@ class AnnotationStorage:
             writer = csv.DictWriter(f, fieldnames=[
                 'annotation_id', 'image_path', 'folder', 'filename', 
                 'suggested_label', 'is_correct', 'corrected_label', 
-                'annotator', 'timestamp'
+                'annotator', 'timestamp', 'status'
             ])
             writer.writerow(full_annotation)
         
