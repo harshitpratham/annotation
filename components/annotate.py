@@ -249,7 +249,7 @@ def show_annotation_page():
         st.markdown("### Image")
         image = data_loader.load_image(current_data['image_path'])
         if image:
-            st.image(image, width="auto")
+            st.image(image, use_container_width=True)
         else:
             st.error("Failed to load image")
         

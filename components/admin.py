@@ -542,7 +542,7 @@ def show_admin_page():
                         data_loader = DataLoader()
                         img = data_loader.load_image(selected_image)
                         if img:
-                            st.image(img, width="auto")
+                            st.image(img, use_container_width=True)
                     
                     with col2:
                         st.markdown("**All annotations for this image:**")
