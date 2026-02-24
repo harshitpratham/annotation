@@ -275,7 +275,27 @@ class AnnotationStorage:
     
     def load_history_df(self) -> pd.DataFrame:
         """Load annotation history as pandas DataFrame."""
-        return pd.read_csv(self.history_csv)
+        # Prefer JSON for schema consistency; fall back to CSV if needed
+        try:
+            history = self.load_history()
+            if not history:
+                return pd.DataFrame()
+            df = pd.DataFrame(history)
+            return df
+        except Exception:
+            try:
+                # Read CSV but keep only known columns to avoid misaligned rows
+                cols = [
+                    'annotation_id', 'image_path', 'folder', 'filename',
+                    'suggested_label', 'is_correct', 'corrected_label',
+                    'annotator', 'timestamp', 'status'
+                ]
+                df = pd.read_csv(self.history_csv, engine='python')
+                # Keep intersection of expected columns
+                keep_cols = [c for c in cols if c in df.columns]
+                return df[keep_cols]
+            except Exception:
+                return pd.DataFrame()
     
     def get_user_annotations(self, username: str) -> List[Dict]:
         """Get all annotations by a specific user."""

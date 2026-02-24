@@ -96,18 +96,21 @@ def show_admin_page():
         if not history_df.empty:
             st.subheader("📈 Annotation Progress Over Time")
             
-            # Convert timestamp to datetime (errors='coerce' handles invalid/corrupt values)
+            # Convert timestamp to datetime robustly (copy to avoid modifying original)
             time_df = history_df.copy()
             if 'timestamp' in time_df.columns:
                 time_df['timestamp'] = pd.to_datetime(time_df['timestamp'], errors='coerce')
-                time_df = time_df.dropna(subset=['timestamp'])  # Drop rows with invalid timestamps
-            if not time_df.empty:
+                # Drop rows where timestamp couldn't be parsed
+                time_df = time_df.dropna(subset=['timestamp'])
                 time_df['date'] = time_df['timestamp'].dt.date
-                daily_counts = time_df.groupby('date').size().reset_index(name='count')
-                daily_counts['cumulative'] = daily_counts['count'].cumsum()
-                st.line_chart(daily_counts.set_index('date')['cumulative'])
             else:
-                st.info("No valid timestamp data available for progress chart")
+                time_df['date'] = pd.NaT
+            
+            # Group by date
+            daily_counts = time_df.groupby('date').size().reset_index(name='count') if 'date' in time_df.columns else pd.DataFrame({'date': [], 'count': []})
+            daily_counts['cumulative'] = daily_counts['count'].cumsum()
+            
+            st.line_chart(daily_counts.set_index('date')['cumulative'])
     
     # Tab 2: User Management
     with tab2:
