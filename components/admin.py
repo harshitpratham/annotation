@@ -96,21 +96,25 @@ def show_admin_page():
         if not history_df.empty:
             st.subheader("📈 Annotation Progress Over Time")
             
-            # Convert timestamp to datetime robustly (copy to avoid modifying original)
-            time_df = history_df.copy()
-            if 'timestamp' in time_df.columns:
+            try:
+                # Convert timestamp to datetime (make a copy to avoid modifying original)
+                time_df = history_df.copy()
                 time_df['timestamp'] = pd.to_datetime(time_df['timestamp'], errors='coerce')
-                # Drop rows where timestamp couldn't be parsed
+                # Remove rows with invalid timestamps
                 time_df = time_df.dropna(subset=['timestamp'])
-                time_df['date'] = time_df['timestamp'].dt.date
-            else:
-                time_df['date'] = pd.NaT
-            
-            # Group by date
-            daily_counts = time_df.groupby('date').size().reset_index(name='count') if 'date' in time_df.columns else pd.DataFrame({'date': [], 'count': []})
-            daily_counts['cumulative'] = daily_counts['count'].cumsum()
-            
-            st.line_chart(daily_counts.set_index('date')['cumulative'])
+                
+                if not time_df.empty:
+                    time_df['date'] = time_df['timestamp'].dt.date
+                    
+                    # Group by date
+                    daily_counts = time_df.groupby('date').size().reset_index(name='count')
+                    daily_counts['cumulative'] = daily_counts['count'].cumsum()
+                    
+                    st.line_chart(daily_counts.set_index('date')['cumulative'])
+                else:
+                    st.info("No valid timestamp data available")
+            except Exception as e:
+                st.warning(f"Could not parse timestamps: {e}")
     
     # Tab 2: User Management
     with tab2:
